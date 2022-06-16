@@ -85,7 +85,7 @@ public:
 
 void PluginInit()
 {
-	LL::registerPlugin("CustomMap", "Customize the pixels on the map", LL::Version(1, 1, 1));
+	LL::registerPlugin("CustomMap", "Customize the pixels on the map", LL::Version(1, 1, 3));
 	logger.info("CustomMap Loaded");
 	Event::RegCmdEvent::subscribe([](Event::RegCmdEvent ev) { //×¢²áÖ¸ÁîÊÂ¼ş
 		MapCommand::setup(ev.mCommandRegistry);
