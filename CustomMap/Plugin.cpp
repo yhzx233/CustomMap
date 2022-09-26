@@ -1,25 +1,25 @@
 #include "pch.h"
-#include <EventAPI.h>
-#include <LoggerAPI.h>
-#include <MC/Level.hpp>
-#include <MC/BlockInstance.hpp>
-#include <MC/Block.hpp>
-#include <MC/BlockSource.hpp>
-#include <MC/Actor.hpp>
-#include <MC/Player.hpp>
-#include <MC/ItemStack.hpp>
-#include <LLAPI.h>
+#include <llapi/EventAPI.h>
+#include <llapi/LoggerAPI.h>
+#include <llapi/mc/Level.hpp>
+#include <llapi/mc/BlockInstance.hpp>
+#include <llapi/mc/Block.hpp>
+#include <llapi/mc/BlockSource.hpp>
+#include <llapi/mc/Actor.hpp>
+#include <llapi/mc/Player.hpp>
+#include <llapi/mc/ItemStack.hpp>
+#include <llapi/LLAPI.h>
 
-#include <RegCommandAPI.h>
-#include <MC/ServerPlayer.hpp>
-#include <MC/ActorUniqueID.hpp>
-#include <MC/MapItemSavedData.hpp>
-#include <MC/MapItem.hpp>
+#include <llapi/RegCommandAPI.h>
+#include <llapi/mc/ServerPlayer.hpp>
+#include <llapi/mc/ActorUniqueID.hpp>
+#include <llapi/mc/MapItemSavedData.hpp>
+#include <llapi/mc/MapItem.hpp>
 
 #include <iostream>
 #include <fstream>
 
-#include <Utils/Bstream.h>
+#include <llapi/Utils/Bstream.h>
 
 Logger logger("CustomMap");
 
@@ -85,7 +85,7 @@ public:
 
 void PluginInit()
 {
-	LL::registerPlugin("CustomMap", "Customize the pixels on the map", LL::Version(1, 1, 5));
+	ll::registerPlugin("CustomMap", "Customize the pixels on the map", ll::Version(1, 1, 6));
 	logger.info("CustomMap Loaded");
 	Event::RegCmdEvent::subscribe([](Event::RegCmdEvent ev) { //×¢²áÖ¸ÁîÊÂ¼þ
 		MapCommand::setup(ev.mCommandRegistry);
