@@ -15,11 +15,15 @@
 #include <llapi/mc/ActorUniqueID.hpp>
 #include <llapi/mc/MapItemSavedData.hpp>
 #include <llapi/mc/MapItem.hpp>
+#include <llapi/mc/DBStorage.hpp>
+#include <llapi/mc/Int64Tag.hpp>
+
+#include <llapi/Utils/Bstream.h>
+
+#include <llapi/RemoteCallAPI.h>
 
 #include <iostream>
 #include <fstream>
-
-#include <llapi/Utils/Bstream.h>
 
 Logger logger("CustomMap");
 
@@ -70,6 +74,7 @@ bool oncmd_map(CommandOrigin const& ori, CommandOutput& outp, string const& name
 class MapCommand : public Command {
 	string filename;
 	bool filename_isSet;
+
 public:
 	void execute(CommandOrigin const& ori, CommandOutput& output) const override {//执行部分
 		oncmd_map(ori, output, filename);
@@ -77,18 +82,171 @@ public:
 
 	static void setup(CommandRegistry* registry) {//注册部分(推荐做法)
 		registry->registerCommand("map", "Customize the pixels on the map", CommandPermissionLevel::Any, { (CommandFlagValue)0 }, { (CommandFlagValue)0x80 });
-		registry->registerOverload<MapCommand>(
-			"map",
-			RegisterCommandHelper::makeMandatory(&MapCommand::filename, "filename", &MapCommand::filename_isSet));
+
+		auto filename = RegisterCommandHelper::makeMandatory(&MapCommand::filename, "filename", &MapCommand::filename_isSet);
+		
+		registry->registerOverload<MapCommand>("map", filename);
 	}
 };
 
+DBHelpers::Category const mapCategory = (DBHelpers::Category)6;
+
+class MapOpCommand : public Command {
+
+	enum class Operation {
+		List,
+		Info,
+		Delete,
+		Set
+	} mOperation;
+	bool mOperation_isSet;
+
+	string mUUID;
+	bool mUUID_isSet;
+
+public:
+	void execute(CommandOrigin const& ori, CommandOutput& output) const override {//执行部分
+		if (mOperation == Operation::List) {
+			string list;
+			Global<DBStorage>->forEachKeyWithPrefix("map_", (DBHelpers::Category)6,
+				[&](gsl::cstring_span<-1> key_left, gsl::cstring_span<-1> data) {
+					list += key_left.data();
+					list += ",";
+				});
+			list.pop_back();
+			output.success(list);
+			return;
+		}
+
+		if (mOperation == Operation::Info) {
+			auto* player = ori.getPlayer();
+			if (player == nullptr) {
+				output.error("Not a player");
+				return;
+			}
+			auto& item = player->getCarriedItem();
+			ActorUniqueID id = MapItem::getMapId(item.getUserData());
+			if (id == -1) {
+				output.error("No map uuid");
+				return;
+			}
+			output.success(item.getUserData()->toPrettySNBT(true));
+			return;
+		}
+
+		// auto nbt = Global<DBStorage>->getCompoundTag(std::format("map_{}", (long long) id), mapCategory);
+		// logger.info(nbt->toPrettySNBT());
+		if (mOperation == Operation::Delete) {
+			string mapKey;
+			if (!mUUID_isSet) {
+				auto* player = ori.getPlayer();
+				if (player == nullptr) {
+					output.error("Not a player");
+					return;
+				}
+				auto& item = player->getCarriedItem();
+				ActorUniqueID id = MapItem::getMapId(item.getUserData());
+				if (id == -1) {
+					output.error("No map uuid");
+					return;
+				}
+				mapKey = std::format("map_{}", (long long)id);
+				return;
+			}
+			else {
+				mapKey = "map_" + mUUID;
+			}
+			DBStorage* db = Global<DBStorage>;
+			if (db->hasKey(mapKey, mapCategory)) {
+				db->deleteData(mapKey, mapCategory);
+				output.success("Map data deleted");
+			}
+			else {
+				output.error(std::format("Key {} not found", mapKey));
+			}
+			return;
+		}
+
+		if (mOperation == Operation::Set) {
+			if (!mUUID_isSet) {
+				output.error("No UUID");
+				return;
+			}
+			auto* player = ori.getPlayer();
+			if (player == nullptr) {
+				output.error("Not a player");
+				return;
+			}
+			auto& item = player->getCarriedItem();
+			auto newItem = item.clone();
+			try {
+				newItem.getUserData()->getInt64Tag("map_uuid")->set(std::stoll(mUUID));
+			}
+			catch (std::exception &e) {
+				output.error(e.what());
+				return;
+			}
+			player->setCarriedItem(newItem);
+			player->refreshInventory();
+			output.success("UUID Modified");
+		}
+	}
+
+	static void setup(CommandRegistry* registry) {//注册部分(推荐做法)
+		registry->registerCommand("mapop", "Manage map data storage", CommandPermissionLevel::GameMasters, { (CommandFlagValue)0 }, { (CommandFlagValue)0x80 });
+
+		registry->addEnum<Operation>("CustomMap_Action", {
+			{"list", Operation::List},
+			{"info", Operation::Info},
+			{"del", Operation::Delete},
+			{"set", Operation::Set}
+			});
+
+		auto action = RegisterCommandHelper::makeMandatory<CommandParameterDataType::ENUM>(&MapOpCommand::mOperation, "action", "CustomMap_Action", &MapOpCommand::mOperation_isSet);
+		auto uuid = RegisterCommandHelper::makeOptional(&MapOpCommand::mUUID, "uuid", &MapOpCommand::mUUID_isSet);
+
+		registry->registerOverload<MapOpCommand>("mapop", action, uuid);
+	}
+};
+
+void exportAPIs() {
+	RemoteCall::exportAs("CustomMap", "delMap", [](long long uuid) {
+		string mapKey = std::format("map_{}", uuid);
+		DBStorage* db = Global<DBStorage>;
+		if (db->hasKey(mapKey, mapCategory)) {
+			db->deleteData(mapKey, mapCategory);
+			return true;
+		}
+		else {
+			return false;
+		}
+		});
+
+	RemoteCall::exportAs("CustomMap", "getMapList", []() {
+		vector<long long> uuids;
+		Global<DBStorage>->forEachKeyWithPrefix("map_", (DBHelpers::Category)6,
+			[&](gsl::cstring_span<-1> key_left, gsl::cstring_span<-1> data) {
+				try {
+					uuids.push_back(std::stoll(key_left.data()));
+				}
+				catch (std::exception& e) {
+					logger.error(e.what());
+					return;
+				}
+			});
+		return uuids;
+		});
+}
+
 void PluginInit()
 {
-	ll::registerPlugin("CustomMap", "Customize the pixels on the map", ll::Version(1, 1, 6));
+	ll::registerPlugin("CustomMap", "Customize the pixels on the map", ll::Version(1, 2, 0));
 	logger.info("CustomMap Loaded");
 	Event::RegCmdEvent::subscribe([](Event::RegCmdEvent ev) { //注册指令事件
 		MapCommand::setup(ev.mCommandRegistry);
+		MapOpCommand::setup(ev.mCommandRegistry);
 		return true;
-		});
+	});
+
+	exportAPIs();
 }
