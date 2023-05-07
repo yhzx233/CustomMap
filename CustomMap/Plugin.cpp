@@ -31,61 +31,67 @@ static inline string ifs2str(std::ifstream& ifs) {
 	return { (std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>() };
 }
 
-bool oncmd_map(CommandOrigin const& ori, CommandOutput& outp, string const& name) {
-	ServerPlayer* player = ori.getPlayer();
-	if (!player->isPlayer()) {
-		outp.addMessage("Not a player");
-		return false;
-	}
-	auto& item = player->getCarriedItem();
-	auto level = ori.getLevel();
-	ActorUniqueID id = MapItem::getMapId(item.getUserData());
-	/**
-	ActorUniqueID id;
-	SymCall("?getMapId@MapItem@@SA?AUActorUniqueID@@PEBVCompoundTag@@@Z", ActorUniqueID*, ActorUniqueID*, uintptr_t, uintptr_t)(
-		&id,
-		*(((uintptr_t*)&item) + 2),
-		(uintptr_t)level);
-	**/
-	MapItemSavedData* mapd = level->getMapSavedData(id);
-	if (!mapd) { outp.error("Not holding a filled map."); return false; }
-	mapd->setLocked();
-	std::ifstream ifs(name + ".bin", std::ios::binary);
-	if (ifs.fail()) {
-		ifs.open(name, std::ios::binary);
-		if (ifs.fail()) {
-			outp.error("No such file or directory.");
-			return false;
-		}
-	}
-	auto str = ifs2str(ifs);
-	RBStream rs{ str };
-	for (int i = 0; i < 128; ++i)
-		for (int j = 0; j < 128; ++j) {
-			unsigned int val;
-			rs.apply(val);
-			mapd->setPixel(0xff000000 | val, j, i);
-		}
-	mapd->save(level->getLevelStorage());
-	outp.success("Done!");
-	return true;
-}
-
 class MapCommand : public Command {
-	string filename;
-	bool filename_isSet;
+	string mFilename;
+	bool mFilename_isSet;
+	bool mAlpha;
+	bool mAlpha_isSet;
+	bool mOutput;
+	bool mOutput_isSet;
 
 public:
-	void execute(CommandOrigin const& ori, CommandOutput& output) const override {//执行部分
-		oncmd_map(ori, output, filename);
+	void execute(CommandOrigin const& ori, CommandOutput& output) const override {//鎵ц閮ㄥ垎
+		ServerPlayer* player = ori.getPlayer();
+		if (!player->isPlayer()) {
+			output.error("Not a player");
+			return;
+		}
+		auto& item = player->getCarriedItem();
+		auto level = ori.getLevel();
+		ActorUniqueID id = MapItem::getMapId(item.getUserData());
+		/**
+		ActorUniqueID id;
+		SymCall("?getMapId@MapItem@@SA?AUActorUniqueID@@PEBVCompoundTag@@@Z", ActorUniqueID*, ActorUniqueID*, uintptr_t, uintptr_t)(
+			&id,
+			*(((uintptr_t*)&item) + 2),
+			(uintptr_t)level);
+		**/
+		MapItemSavedData* mapd = level->getMapSavedData(id);
+		if (!mapd) { output.error("Not holding a filled map."); return; }
+		mapd->setLocked();
+		std::ifstream ifs(mFilename + ".bin", std::ios::binary);
+		if (ifs.fail()) {
+			ifs.open(mFilename, std::ios::binary);
+			if (ifs.fail()) {
+				output.error("No such file or directory.");
+				return;
+			}
+		}
+		auto str = ifs2str(ifs);
+		RBStream rs{ str };
+
+		auto alpha = (mAlpha_isSet && mAlpha) ? 0 : (0xff << 24);
+
+		for (int i = 0; i < 128; ++i)
+			for (int j = 0; j < 128; ++j) {
+				unsigned int val;
+				rs.apply(val);
+				mapd->setPixel(alpha | val, j, i);
+			}
+		mapd->save(level->getLevelStorage());
+		if (!mOutput_isSet || mOutput) output.success("Done!");
+		else output.success();
+		return;
 	}
 
-	static void setup(CommandRegistry* registry) {//注册部分(推荐做法)
+	static void setup(CommandRegistry* registry) {//娉ㄥ唽閮ㄥ垎(鎺ㄨ崘鍋氭硶)
 		registry->registerCommand("map", "Customize the pixels on the map", CommandPermissionLevel::Any, { (CommandFlagValue)0 }, { (CommandFlagValue)0x80 });
 
-		auto filename = RegisterCommandHelper::makeMandatory(&MapCommand::filename, "filename", &MapCommand::filename_isSet);
+		auto filename = RegisterCommandHelper::makeMandatory(&MapCommand::mFilename, "filename", &MapCommand::mFilename_isSet);
+		auto alpha = RegisterCommandHelper::makeOptional(&MapCommand::mAlpha, "alpha", &MapCommand::mAlpha_isSet);
+		auto output = RegisterCommandHelper::makeOptional(&MapCommand::mOutput, "output", &MapCommand::mOutput_isSet);
 		
-		registry->registerOverload<MapCommand>("map", filename);
+		registry->registerOverload<MapCommand>("map", filename, alpha, output);
 	}
 };
 
@@ -105,7 +111,7 @@ class MapOpCommand : public Command {
 	bool mUUID_isSet;
 
 public:
-	void execute(CommandOrigin const& ori, CommandOutput& output) const override {//执行部分
+	void execute(CommandOrigin const& ori, CommandOutput& output) const override {//鎵ц閮ㄥ垎
 		if (mOperation == Operation::List) {
 			string list;
 			Global<DBStorage>->forEachKeyWithPrefix("map_", (DBHelpers::Category)6,
@@ -192,7 +198,7 @@ public:
 		}
 	}
 
-	static void setup(CommandRegistry* registry) {//注册部分(推荐做法)
+	static void setup(CommandRegistry* registry) {//娉ㄥ唽閮ㄥ垎(鎺ㄨ崘鍋氭硶)
 		registry->registerCommand("mapop", "Manage map data storage", CommandPermissionLevel::GameMasters, { (CommandFlagValue)0 }, { (CommandFlagValue)0x80 });
 
 		registry->addEnum<Operation>("CustomMap_Action", {
@@ -240,9 +246,9 @@ void exportAPIs() {
 
 void PluginInit()
 {
-	ll::registerPlugin("CustomMap", "Customize the pixels on the map", ll::Version(1, 2, 0));
+	ll::registerPlugin("CustomMap", "Customize the pixels on the map", ll::Version(1, 2, 2));
 	logger.info("CustomMap Loaded");
-	Event::RegCmdEvent::subscribe([](Event::RegCmdEvent ev) { //注册指令事件
+	Event::RegCmdEvent::subscribe([](Event::RegCmdEvent ev) { //娉ㄥ唽鎸囦护浜嬩欢
 		MapCommand::setup(ev.mCommandRegistry);
 		MapOpCommand::setup(ev.mCommandRegistry);
 		return true;
