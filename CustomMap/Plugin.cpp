@@ -1,6 +1,10 @@
 #include "pch.h"
 #include <llapi/EventAPI.h>
 #include <llapi/LoggerAPI.h>
+#include <llapi/RemoteCallAPI.h>
+#include <llapi/RegCommandAPI.h>
+#include <llapi/LLAPI.h>
+
 #include <llapi/mc/Level.hpp>
 #include <llapi/mc/BlockInstance.hpp>
 #include <llapi/mc/Block.hpp>
@@ -8,9 +12,7 @@
 #include <llapi/mc/Actor.hpp>
 #include <llapi/mc/Player.hpp>
 #include <llapi/mc/ItemStack.hpp>
-#include <llapi/LLAPI.h>
 
-#include <llapi/RegCommandAPI.h>
 #include <llapi/mc/ServerPlayer.hpp>
 #include <llapi/mc/ActorUniqueID.hpp>
 #include <llapi/mc/MapItemSavedData.hpp>
@@ -18,9 +20,12 @@
 #include <llapi/mc/DBStorage.hpp>
 #include <llapi/mc/Int64Tag.hpp>
 
-#include <llapi/Utils/Bstream.h>
+#define ENABLE_VIRTUAL_FAKESYMBOL_SERVERLEVEL
+#include <llapi/mc/ServerLevel.hpp>
+#include <llapi/mc/MapDataManager.hpp>
 
-#include <llapi/RemoteCallAPI.h>
+
+#include <llapi/Utils/Bstream.h>
 
 #include <iostream>
 #include <fstream>
@@ -58,7 +63,6 @@ public:
 		**/
 		MapItemSavedData* mapd = level->getMapSavedData(id);
 		if (!mapd) { output.error("Not holding a filled map."); return; }
-		mapd->setLocked();
 		std::ifstream ifs(mFilename + ".bin", std::ios::binary);
 		if (ifs.fail()) {
 			ifs.open(mFilename, std::ios::binary);
@@ -78,6 +82,8 @@ public:
 				rs.apply(val);
 				mapd->setPixel(alpha | val, j, i);
 			}
+		mapd->setLocked();
+		mapd->setOrigin(Vec3(1e9, 0., 1e9), 0, VanillaDimensions::Overworld, false, false, BlockPos((int)1e9, 0, (int)1e9));
 		mapd->save(level->getLevelStorage());
 		if (!mOutput_isSet || mOutput) output.success("Done!");
 		else output.success();
@@ -136,12 +142,11 @@ public:
 				output.error("No map uuid");
 				return;
 			}
+			//auto nbt = Global<DBStorage>->getCompoundTag(std::format("map_{}", (long long)id), mapCategory);
+			//logger.info(nbt->toPrettySNBT());
 			output.success(item.getUserData()->toPrettySNBT(true));
 			return;
 		}
-
-		// auto nbt = Global<DBStorage>->getCompoundTag(std::format("map_{}", (long long) id), mapCategory);
-		// logger.info(nbt->toPrettySNBT());
 		if (mOperation == Operation::Delete) {
 			string mapKey;
 			if (!mUUID_isSet) {
@@ -242,17 +247,40 @@ void exportAPIs() {
 			});
 		return uuids;
 		});
+
+	RemoteCall::exportAs("CustomMap", "addMap", [](string filepath) {
+		std::ifstream ifs(filepath, std::ios::binary);
+		if (ifs.fail()) {
+			return -1LL;
+		}
+		auto str = ifs2str(ifs);
+		RBStream rs{ str };
+
+		auto level = Global<ServerLevel>;
+		auto id = level->getNewUniqueID();
+		MapItemSavedData& mapd = level->_getMapDataManager().createMapSavedData(id, true);
+		for (int i = 0; i < 128; ++i)
+			for (int j = 0; j < 128; ++j) {
+				unsigned int val;
+				rs.apply(val);
+				mapd.setPixel(val, j, i);
+			}
+		mapd.setLocked();
+		mapd.setScale(4);
+		mapd.setOrigin(Vec3(1e9, 0., 1e9), 0, VanillaDimensions::Overworld, false, false, BlockPos((int)1e9, 0, (int)1e9));
+		mapd.save(level->getLevelStorage());
+		return id.get();
+		});
 }
 
 void PluginInit()
 {
-	ll::registerPlugin("CustomMap", "Customize the pixels on the map", ll::Version(1, 2, 2));
-	logger.info("CustomMap Loaded");
+	ll::registerPlugin("CustomMap", "Customize the pixels on the map", ll::Version(1, 2, 6));
 	Event::RegCmdEvent::subscribe([](Event::RegCmdEvent ev) { //注册指令事件
 		MapCommand::setup(ev.mCommandRegistry);
 		MapOpCommand::setup(ev.mCommandRegistry);
 		return true;
 	});
-
 	exportAPIs();
+	logger.info("CustomMap Loaded");
 }
