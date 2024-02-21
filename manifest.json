@@ -1,5 +1,10 @@
 {
     "name": "${pluginName}",
     "entry": "${pluginFile}",
-    "type": "native"
+    "type": "native",
+    "dependencies": [
+        {
+            "name": "LegacyRemoteCall"
+        }
+    ]
 }

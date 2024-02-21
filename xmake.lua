@@ -3,6 +3,7 @@ add_rules("mode.debug", "mode.release", "mode.releasedbg")
 add_repositories("liteldev-repo https://github.com/LiteLDev/xmake-repo.git")
 
 add_requires("levilamina") -- You can also use a specific version with postfix x.x.x
+add_requires("legacyremotecall")
 
 set_runtimes("MD")
 
@@ -23,7 +24,8 @@ target("CustomMap") -- Change this to your plugin name.
         "src"
     )
     add_packages(
-        "levilamina"
+        "levilamina",
+        "legacyremotecall"
     )
     add_shflags(
         "/DELAYLOAD:bedrock_server.dll" -- To use forged symbols of SymbolProvider.
