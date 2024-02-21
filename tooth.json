@@ -1,7 +1,7 @@
 {
     "format_version": 2,
     "tooth": "github.com/yhzx233/CustomMap",
-    "version": "1.3.0",
+    "version": "1.3.1",
     "info": {
         "name": "CustomMap",
         "description": "Utilize transformation tools to get custom map in server.",
@@ -13,6 +13,7 @@
             "custommap"
         ]
     },
+    "asset_url": "https://github.com/yhzx233/CustomMap/releases/download/v1.3.1/CustomMap-windows-x64.zip",
     "dependencies": {
         "github.com/LiteLDev/LegacyRemoteCall": ">=0.3.0"
     },
