@@ -126,7 +126,7 @@ void RemoteCallExport() {
         return uuids;
     });
 
-    RemoteCall::exportAs("CustomMap", "addMap", [](const std::string& filepath) {
+    auto addMap = [](const std::string& filepath, bool alpha) {
         std::ifstream ifs(filepath, std::ios::binary);
         if (ifs.fail()) {
             return -1LL;
@@ -137,10 +137,18 @@ void RemoteCallExport() {
         auto& mapd  = level._getMapDataManager().createMapSavedData(id);
 
         mapd.setScale(4); // no parentMapId
-        MapSetPixels(mapd, ifs, true);
+        MapSetPixels(mapd, ifs, alpha);
 
         mapd.save(level.getLevelStorage());
         return id.get();
+    };
+
+    RemoteCall::exportAs("CustomMap", "addMap", [&addMap](const std::string& filepath) {
+        return addMap(filepath, true);
+    });
+
+    RemoteCall::exportAs("CustomMap", "addMapNoAlpha", [&addMap](const std::string& filepath) {
+        return addMap(filepath, false);
     });
 }
 
