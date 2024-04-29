@@ -10,7 +10,14 @@ set_runtimes("MD")
 target("CustomMap") -- Change this to your plugin name.
     add_cxflags(
         "/EHa", -- To catch both structured (asynchronous) and standard C++ (synchronous) exceptions.
-        "/utf-8" -- To enable UTF-8 source code.
+        "/utf-8", -- To enable UTF-8 source code.
+        "/W4",
+        "/w44265",
+        "/w44289",
+        "/w44296",
+        "/w45263",
+        "/w44738",
+        "/w45204"
     )
     add_defines(
         "_HAS_CXX23=1", -- To enable C++23 features
@@ -37,9 +44,16 @@ target("CustomMap") -- Change this to your plugin name.
     after_build(function (target)
         local plugin_packer = import("scripts.after_build")
 
+        local tag = os.iorun("git describe --tags --abbrev=0 --always")
+        local major, minor, patch, suffix = tag:match("v(%d+)%.(%d+)%.(%d+)(.*)")
+        if not major then
+            print("Failed to parse version tag, using 0.0.0")
+            major, minor, patch = 0, 0, 0
+        end
         local plugin_define = {
             pluginName = target:name(),
             pluginFile = path.filename(target:targetfile()),
+            pluginVersion = major .. "." .. minor .. "." .. patch,
         }
         
         plugin_packer.pack_plugin(target,plugin_define)

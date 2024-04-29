@@ -1,13 +1,12 @@
 #include "CustomMap.h"
 
-#include "mc/world/level/saveddata/maps/MapItemSavedData.h"
-
 #include <RemoteCallAPI.h>
 #include <ll/api/command/CommandHandle.h>
 #include <ll/api/command/CommandRegistrar.h>
 #include <ll/api/plugin/NativePlugin.h>
 #include <ll/api/service/Bedrock.h>
 #include <mc/enums/d_b_helpers/Category.h>
+#include <mc/nbt/Int64Tag.h>
 #include <mc/server/ServerLevel.h>
 #include <mc/server/commands/CommandOrigin.h>
 #include <mc/server/commands/CommandOutput.h>
@@ -18,6 +17,7 @@
 #include <mc/world/item/MapItem.h>
 #include <mc/world/level/Level.h>
 #include <mc/world/level/dimension/VanillaDimensions.h>
+#include <mc/world/level/saveddata/maps/MapItemSavedData.h>
 #include <mc/world/level/storage/LevelStorage.h>
 
 #define logger CustomMap::getInstance().getSelf().getLogger()
@@ -56,7 +56,7 @@ void RegisterMapCommands() {
         .required("filename")
         .optional("alpha")
         .optional("output")
-        .execute<[&](CommandOrigin const& origin, CommandOutput& output, MapParams const& param, Command const&) {
+        .execute([&](CommandOrigin const& origin, CommandOutput& output, MapParams const& param, Command const&) {
             auto* entity = origin.getEntity();
             if (entity == nullptr || !entity->isType(ActorType::Player)) {
                 output.error("Only players can use this command");
@@ -64,14 +64,20 @@ void RegisterMapCommands() {
             }
 
             auto* player = static_cast<Player*>(entity);
+            auto* level  = origin.getLevel();
 
-            auto& item  = player->getCarriedItem();
-            auto* level = origin.getLevel();
-            auto  uuid  = MapItem::getMapId(item.getUserData());
-            auto* mapd  = level->getMapSavedData(uuid);
+            auto& item = player->getCarriedItem();
+            auto* data = item.getUserData();
+
+            if (data == nullptr) {
+                output.error("You must hold a filled map in your hand");
+                return;
+            }
+
+            auto* mapd = level->getMapSavedData(*data);
 
             if (mapd == nullptr) {
-                output.error("This map has no data");
+                output.error("You must hold a filled map in your hand");
                 return;
             }
 
@@ -93,7 +99,7 @@ void RegisterMapCommands() {
             } else {
                 output.success();
             }
-        }>();
+        });
 }
 
 void RemoteCallExport() {
@@ -111,18 +117,14 @@ void RemoteCallExport() {
     RemoteCall::exportAs("CustomMap", "getMapList", []() {
         std::vector<long long> uuids;
         auto&                  db = ll::service::getLevel()->getLevelStorage();
-        db.forEachKeyWithPrefix(
-            "map_",
-            DBHelpers::Category::Item,
-            [&](std::string_view key_left, std::string_view data) {
-                try {
-                    uuids.push_back(std::stoll(key_left.data()));
-                } catch (std::exception& e) {
-                    logger.error(e.what());
-                    return;
-                }
+        db.forEachKeyWithPrefix("map_", DBHelpers::Category::Item, [&](std::string_view key_left, std::string_view) {
+            try {
+                uuids.push_back(std::stoll(key_left.data()));
+            } catch (std::exception& e) {
+                logger.error(e.what());
+                return;
             }
-        );
+        });
         return uuids;
     });
 
@@ -133,14 +135,14 @@ void RemoteCallExport() {
         }
 
         auto& level = static_cast<ServerLevel&>(ll::service::getLevel().get());
-        auto  id    = level.getNewUniqueID();
-        auto& mapd  = level._getMapDataManager().createMapSavedData(id);
+        auto  uid   = level.getNewUniqueID();
+        auto& mapd  = level._getMapDataManager().createMapSavedData(uid);
 
         mapd.setScale(4); // no parentMapId
         MapSetPixels(mapd, ifs, alpha);
 
         mapd.save(level.getLevelStorage());
-        return id.get();
+        return uid.id;
     };
 
     RemoteCall::exportAs("CustomMap", "addMap", [&addMap](const std::string& filepath) {
