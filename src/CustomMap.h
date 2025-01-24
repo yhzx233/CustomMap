@@ -1,33 +1,30 @@
 #pragma once
 
-#include <ll/api/plugin/NativePlugin.h>
 
-namespace custom_map {
+#include <ll/api/mod/NativeMod.h>
+#include <memory>
 
-class CustomMap {
-    CustomMap();
+namespace CustomMap {
 
+// extern std::shared_ptr<KomomoModManager> komomoModManager;
+class Entry {
 public:
-    CustomMap(CustomMap&&)                 = delete;
-    CustomMap(const CustomMap&)            = delete;
-    CustomMap& operator=(CustomMap&&)      = delete;
-    CustomMap& operator=(const CustomMap&) = delete;
+    static Entry& getInstance();
 
-    static CustomMap& getInstance();
 
-    [[nodiscard]] ll::plugin::NativePlugin& getSelf() const;
+    Entry() : mSelf(*ll::mod::NativeMod::current()) {}
 
-    /// @return True if the plugin is loaded successfully.
-    bool load(ll::plugin::NativePlugin&);
+    [[nodiscard]] ll::mod::NativeMod& getSelf() const { return mSelf; }
 
-    /// @return True if the plugin is enabled successfully.
+    bool load();
+
     bool enable();
 
-    /// @return True if the plugin is disabled successfully.
     bool disable();
 
-private:
-    ll::plugin::NativePlugin* mSelf{};
-};
+    // bool unload();
 
-} // namespace custom_map
+private:
+    ll::mod::NativeMod& mSelf;
+};
+}; // namespace CustomMap

@@ -2,7 +2,8 @@ add_rules("mode.debug", "mode.release", "mode.releasedbg")
 
 add_repositories("liteldev-repo https://github.com/LiteLDev/xmake-repo.git")
 
-add_requires("levilamina") -- You can also use a specific version with postfix x.x.x
+add_requires("levilamina 1.0.0-rc.3", {configs = {target_type = "server"}})
+add_requires("levibuildscript 0.3.0")
 add_requires("legacyremotecall")
 
 set_runtimes("MD")
@@ -40,21 +41,6 @@ target("CustomMap") -- Change this to your plugin name.
     set_exceptions("none") -- To avoid conflicts with /EHa.
     set_kind("shared")
     set_languages("cxx20")
+    add_rules("@levibuildscript/linkrule")
+    add_rules("@levibuildscript/modpacker")
 
-    after_build(function (target)
-        local plugin_packer = import("scripts.after_build")
-
-        local tag = os.iorun("git describe --tags --abbrev=0 --always")
-        local major, minor, patch, suffix = tag:match("v(%d+)%.(%d+)%.(%d+)(.*)")
-        if not major then
-            print("Failed to parse version tag, using 0.0.0")
-            major, minor, patch = 0, 0, 0
-        end
-        local plugin_define = {
-            pluginName = target:name(),
-            pluginFile = path.filename(target:targetfile()),
-            pluginVersion = major .. "." .. minor .. "." .. patch,
-        }
-        
-        plugin_packer.pack_plugin(target,plugin_define)
-    end)

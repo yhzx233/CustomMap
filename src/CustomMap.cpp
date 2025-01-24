@@ -1,28 +1,30 @@
 #include "CustomMap.h"
 
-#include <RemoteCallAPI.h>
+#include "RemoteCallAPI.h"
+
 #include <ll/api/command/CommandHandle.h>
 #include <ll/api/command/CommandRegistrar.h>
-#include <ll/api/plugin/NativePlugin.h>
 #include <ll/api/service/Bedrock.h>
-#include <mc/enums/d_b_helpers/Category.h>
+#include <mc/common/ActorUniqueID.h>
 #include <mc/nbt/Int64Tag.h>
 #include <mc/server/ServerLevel.h>
 #include <mc/server/commands/CommandOrigin.h>
 #include <mc/server/commands/CommandOutput.h>
 #include <mc/server/commands/CommandPermissionLevel.h>
-#include <mc/world/ActorUniqueID.h>
 #include <mc/world/actor/player/Player.h>
-#include <mc/world/components/MapDataManager.h>
 #include <mc/world/item/MapItem.h>
 #include <mc/world/level/Level.h>
+#include <mc/world/level/MapDataManager.h>
 #include <mc/world/level/dimension/VanillaDimensions.h>
 #include <mc/world/level/saveddata/maps/MapItemSavedData.h>
 #include <mc/world/level/storage/LevelStorage.h>
+#include <mc/world/level/storage/db_helpers/Category.h>
 
-#define logger CustomMap::getInstance().getSelf().getLogger()
 
-namespace custom_map {
+
+#define logger CustomMap::Entry::getInstance().getSelf().getLogger()
+
+namespace CustomMap {
 
 struct MapParams {
     std::string filename;
@@ -41,11 +43,19 @@ void MapSetPixels(MapItemSavedData& mapd, std::ifstream& ifs, bool alpha) {
         }
     }
 
-    mapd.setPixelDirty(0, 0);
-    mapd.setPixelDirty(127, 127);
+    mapd.setPixel(0, 0, 0);
+    mapd.setPixel(127, 127, 127);
+
 
     mapd.setLocked();
-    mapd.setOrigin(Vec3(1e9, 0., 1e9), 0, VanillaDimensions::Overworld, false, false, BlockPos((int)1e9, 0, (int)1e9));
+    mapd.setOrigin(
+        Vec3(1e9, 0., 1e9),
+        0,
+        VanillaDimensions::Overworld(),
+        false,
+        false,
+        BlockPos((int)1e9, 0, (int)1e9)
+    );
 }
 
 
@@ -142,7 +152,7 @@ void RemoteCallExport() {
         MapSetPixels(mapd, ifs, alpha);
 
         mapd.save(level.getLevelStorage());
-        return uid.id;
+        return uid.rawID;
     };
 
     RemoteCall::exportAs("CustomMap", "addMap", [&addMap](const std::string& filepath) {
@@ -154,17 +164,15 @@ void RemoteCallExport() {
     });
 }
 
-CustomMap::CustomMap() = default;
+// CustomMap::CustomMap() = default;
 
-CustomMap& CustomMap::getInstance() {
-    static CustomMap instance;
+Entry& Entry::getInstance() {
+    static Entry instance;
     return instance;
 }
 
-ll::plugin::NativePlugin& CustomMap::getSelf() const { return *mSelf; }
 
-bool CustomMap::load(ll::plugin::NativePlugin& self) {
-    mSelf = std::addressof(self);
+bool Entry::load() {
     getSelf().getLogger().info("loading...");
 
     // Code for loading the plugin goes here.
@@ -173,7 +181,7 @@ bool CustomMap::load(ll::plugin::NativePlugin& self) {
     return true;
 }
 
-bool CustomMap::enable() {
+bool Entry::enable() {
     getSelf().getLogger().info("enabling...");
 
     // Code for enabling the plugin goes here.
@@ -182,7 +190,7 @@ bool CustomMap::enable() {
     return true;
 }
 
-bool CustomMap::disable() {
+bool Entry::disable() {
     getSelf().getLogger().info("disabling...");
 
     // Code for disabling the plugin goes here.
@@ -190,18 +198,22 @@ bool CustomMap::disable() {
     return true;
 }
 
-extern "C" {
-_declspec(dllexport) bool ll_plugin_load(ll::plugin::NativePlugin& self) { return CustomMap::getInstance().load(self); }
-
-_declspec(dllexport) bool ll_plugin_enable(ll::plugin::NativePlugin&) { return CustomMap::getInstance().enable(); }
-
-_declspec(dllexport) bool ll_plugin_disable(ll::plugin::NativePlugin&) { return CustomMap::getInstance().disable(); }
-
-/// @warning Unloading the plugin may cause a crash if the plugin has not released all of its
-/// resources. If you are unsure, keep this function commented out.
-// _declspec(dllexport) bool ll_plugin_unload(ll::plugin::NativePlugin&) {
-//     return CustomMap::getInstance().unload();
+// extern "C" {
+// _declspec(dllexport) bool ll_plugin_load(ll::mod::NativePlugin& self) { return CustomMap::getInstance().load(self); }
+//
+// _declspec(dllexport) bool ll_plugin_enable(ll::plugin::NativePlugin&) { return CustomMap::getInstance().enable(); }
+//
+// _declspec(dllexport) bool ll_plugin_disable(ll::plugin::NativePlugin&) { return CustomMap::getInstance().disable(); }
+//
+// /// @warning Unloading the plugin may cause a crash if the plugin has not released all of its
+// /// resources. If you are unsure, keep this function commented out.
+// // _declspec(dllexport) bool ll_plugin_unload(ll::plugin::NativePlugin&) {
+// //     return CustomMap::getInstance().unload();
+// // }
 // }
-}
 
-} // namespace custom_map
+
+} // namespace CustomMap
+
+#include <ll/api/mod/RegisterHelper.h>
+LL_REGISTER_MOD(CustomMap::Entry, CustomMap::Entry::getInstance());
