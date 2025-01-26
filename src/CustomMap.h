@@ -1,11 +1,10 @@
 #pragma once
 
-#include <ll/api/plugin/NativePlugin.h>
+#include <ll/api/mod/NativeMod.h>
 
 namespace custom_map {
 
 class CustomMap {
-    CustomMap();
 
 public:
     CustomMap(CustomMap&&)                 = delete;
@@ -15,10 +14,12 @@ public:
 
     static CustomMap& getInstance();
 
-    [[nodiscard]] ll::plugin::NativePlugin& getSelf() const;
+    CustomMap() : mSelf(*ll::mod::NativeMod::current()) {}
+
+    [[nodiscard]] ll::mod::NativeMod& getSelf() const { return mSelf; }
 
     /// @return True if the plugin is loaded successfully.
-    bool load(ll::plugin::NativePlugin&);
+    bool load();
 
     /// @return True if the plugin is enabled successfully.
     bool enable();
@@ -27,7 +28,7 @@ public:
     bool disable();
 
 private:
-    ll::plugin::NativePlugin* mSelf{};
+    ll::mod::NativeMod& mSelf;
 };
 
 } // namespace custom_map

@@ -3,22 +3,23 @@
 #include <RemoteCallAPI.h>
 #include <ll/api/command/CommandHandle.h>
 #include <ll/api/command/CommandRegistrar.h>
-#include <ll/api/plugin/NativePlugin.h>
+#include <ll/api/mod/NativeMod.h>
+#include <ll/api/mod/RegisterHelper.h>
 #include <ll/api/service/Bedrock.h>
-#include <mc/enums/d_b_helpers/Category.h>
+#include <mc/common/ActorUniqueID.h>
 #include <mc/nbt/Int64Tag.h>
 #include <mc/server/ServerLevel.h>
 #include <mc/server/commands/CommandOrigin.h>
 #include <mc/server/commands/CommandOutput.h>
 #include <mc/server/commands/CommandPermissionLevel.h>
-#include <mc/world/ActorUniqueID.h>
 #include <mc/world/actor/player/Player.h>
-#include <mc/world/components/MapDataManager.h>
 #include <mc/world/item/MapItem.h>
 #include <mc/world/level/Level.h>
+#include <mc/world/level/MapDataManager.h>
 #include <mc/world/level/dimension/VanillaDimensions.h>
 #include <mc/world/level/saveddata/maps/MapItemSavedData.h>
 #include <mc/world/level/storage/LevelStorage.h>
+#include <mc/world/level/storage/db_helpers/Category.h>
 
 #define logger CustomMap::getInstance().getSelf().getLogger()
 
@@ -31,6 +32,10 @@ struct MapParams {
 };
 
 void MapSetPixels(MapItemSavedData& mapd, std::ifstream& ifs, bool alpha) {
+
+    mapd.setPixel(0, 0, 0);
+    mapd.setPixel(0, 127, 127);
+
     auto pixels = const_cast<unsigned int*>(mapd.getPixels().mBegin);
     ifs.read(reinterpret_cast<char*>(pixels), sizeof(unsigned int) * 128 * 128);
 
@@ -41,11 +46,15 @@ void MapSetPixels(MapItemSavedData& mapd, std::ifstream& ifs, bool alpha) {
         }
     }
 
-    mapd.setPixelDirty(0, 0);
-    mapd.setPixelDirty(127, 127);
-
     mapd.setLocked();
-    mapd.setOrigin(Vec3(1e9, 0., 1e9), 0, VanillaDimensions::Overworld, false, false, BlockPos((int)1e9, 0, (int)1e9));
+    mapd.setOrigin(
+        Vec3(1e9, 0., 1e9),
+        0,
+        VanillaDimensions::Overworld(),
+        false,
+        false,
+        BlockPos((int)1e9, 0, (int)1e9)
+    );
 }
 
 
@@ -142,7 +151,7 @@ void RemoteCallExport() {
         MapSetPixels(mapd, ifs, alpha);
 
         mapd.save(level.getLevelStorage());
-        return uid.id;
+        return uid.rawID;
     };
 
     RemoteCall::exportAs("CustomMap", "addMap", [&addMap](const std::string& filepath) {
@@ -154,17 +163,12 @@ void RemoteCallExport() {
     });
 }
 
-CustomMap::CustomMap() = default;
-
 CustomMap& CustomMap::getInstance() {
     static CustomMap instance;
     return instance;
 }
 
-ll::plugin::NativePlugin& CustomMap::getSelf() const { return *mSelf; }
-
-bool CustomMap::load(ll::plugin::NativePlugin& self) {
-    mSelf = std::addressof(self);
+bool CustomMap::load() {
     getSelf().getLogger().info("loading...");
 
     // Code for loading the plugin goes here.
@@ -190,18 +194,6 @@ bool CustomMap::disable() {
     return true;
 }
 
-extern "C" {
-_declspec(dllexport) bool ll_plugin_load(ll::plugin::NativePlugin& self) { return CustomMap::getInstance().load(self); }
-
-_declspec(dllexport) bool ll_plugin_enable(ll::plugin::NativePlugin&) { return CustomMap::getInstance().enable(); }
-
-_declspec(dllexport) bool ll_plugin_disable(ll::plugin::NativePlugin&) { return CustomMap::getInstance().disable(); }
-
-/// @warning Unloading the plugin may cause a crash if the plugin has not released all of its
-/// resources. If you are unsure, keep this function commented out.
-// _declspec(dllexport) bool ll_plugin_unload(ll::plugin::NativePlugin&) {
-//     return CustomMap::getInstance().unload();
-// }
-}
+LL_REGISTER_MOD(custom_map::CustomMap, custom_map::CustomMap::getInstance());
 
 } // namespace custom_map

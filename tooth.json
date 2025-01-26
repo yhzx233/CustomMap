@@ -1,24 +1,24 @@
 {
     "format_version": 2,
     "tooth": "github.com/yhzx233/CustomMap",
-    "version": "1.3.4",
+    "version": "1.3.5",
     "info": {
         "name": "CustomMap",
         "description": "Utilize transformation tools to get custom map in server.",
         "source": "github.com/yhzx233/CustomMap",
         "author": "yhzx233",
         "tags": [
-            "plugin",
-            "ll",
+            "platform:levilamina",
+            "type:mod",
             "custommap"
         ]
     },
-    "asset_url": "https://github.com/yhzx233/CustomMap/releases/download/v1.3.4/CustomMap-windows-x64.zip",
+    "asset_url": "https://github.com/yhzx233/CustomMap/releases/download/v1.3.5/CustomMap-windows-x64.zip",
     "dependencies": {
-        "github.com/LiteLDev/LegacyRemoteCall": ">=0.8.0"
+        "github.com/LiteLDev/LegacyRemoteCall": ">=0.9.0"
     },
     "prerequisites": {
-        "github.com/LiteLDev/LeviLamina": ">=0.13.0"
+        "github.com/LiteLDev/LeviLamina": ">=1.0.0"
     },
     "files": {
         "place": [
