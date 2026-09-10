@@ -24,7 +24,7 @@
 #include <mc/world/level/storage/LevelStorage.h>
 #include <mc/world/level/storage/db_helpers/Category.h>
 
-#define logger CustomMap::getInstance().getSelf().getLogger()
+#define logger custom_map::CustomMap::getInstance().getSelf().getLogger()
 
 namespace custom_map {
 
@@ -36,14 +36,18 @@ constexpr int kFarAwayCoord  = 1000000000;
 constexpr auto kRemoteNamespace = "CustomMap";
 
 [[nodiscard]] auto tryGetLevelStorage() -> optional_ref<LevelStorage> {
-    return ll::service::getLevel().transform([](Level& level) -> LevelStorage& { return level.getLevelStorage(); });
+    return ll::service::getLevel().transform([](Level& level) -> LevelStorage& {
+        return level.getLevelStorage();
+    });
 }
 
 [[nodiscard]] auto tryGetServerLevel() -> optional_ref<ServerLevel> {
-    return ll::service::getLevel().transform([](Level& level) -> ServerLevel& { return level.asServer(); });
+    return ll::service::getLevel().transform([](Level& level) -> ServerLevel& {
+        return level.asServer();
+    });
 }
 
-void RemoteCallCleanup() { RemoteCall::removeNameSpace(kRemoteNamespace); }
+void RemoteCallCleanup() {}
 
 [[nodiscard]] bool MapSetPixels(MapItemSavedData& mapd, std::ifstream& ifs, bool alpha) {
     std::vector<uint> pixels(kMapPixelCount);
@@ -52,7 +56,7 @@ void RemoteCallCleanup() { RemoteCall::removeNameSpace(kRemoteNamespace); }
     }
 
     if (!alpha) {
-        auto alphaBit = 0xff << 24;
+        auto alphaBit = 0xffu << 24;
         for (auto& pixel : pixels) {
             pixel |= alphaBit;
         }
@@ -95,7 +99,7 @@ void RemoteCallCleanup() { RemoteCall::removeNameSpace(kRemoteNamespace); }
     }
 
     auto  uid  = level->getNewUniqueID();
-    auto& mapd = level->_getMapDataManager().createMapSavedData(uid);
+    auto& mapd = level->getMapDataManager()->createMapSavedData(uid);
     mapd.mScale = 4;
 
     if (!MapSetPixels(mapd, ifs, alpha)) {
@@ -110,21 +114,22 @@ void RemoteCallCleanup() { RemoteCall::removeNameSpace(kRemoteNamespace); }
 } // namespace
 
 struct MapParams {
-    std::string filename;
-    bool        alpha{false};
-    bool        output{true};
+    std::string                 filename;
+    ll::command::Optional<bool> alpha;
+    ll::command::Optional<bool> output;
 };
 
 void RegisterMapCommands() {
     auto& command = ll::command::CommandRegistrar::getInstance(false)
                         .getOrCreateCommand("map", "Customize the pixels on the map", CommandPermissionLevel::Any);
+
     command.overload<MapParams>()
         .required("filename")
         .optional("alpha")
         .optional("output")
-        .execute([&](CommandOrigin const& origin, CommandOutput& output, MapParams const& param, Command const&) {
+        .execute([](CommandOrigin const& origin, CommandOutput& output, MapParams const& param) {
             auto* entity = origin.getEntity();
-            if (entity == nullptr || !entity->isType(ActorType::Player)) {
+            if (entity == nullptr || !entity->isPlayer()) {
                 output.error("Only players can use this command");
                 return;
             }
@@ -145,11 +150,13 @@ void RegisterMapCommands() {
             }
 
             auto* mapd = level->getMapSavedData(*data);
-
             if (mapd == nullptr) {
                 output.error("You must hold a filled map in your hand");
                 return;
             }
+
+            bool const useAlpha   = param.alpha.has_value() ? param.alpha.value() : false;
+            bool const showOutput = param.output.has_value() ? param.output.value() : true;
 
             std::ifstream ifs(param.filename + ".bin", std::ios::binary);
             if (ifs.fail()) {
@@ -160,14 +167,14 @@ void RegisterMapCommands() {
                 }
             }
 
-            if (!MapSetPixels(*mapd, ifs, param.alpha)) {
+            if (!MapSetPixels(*mapd, ifs, useAlpha)) {
                 output.error("Failed to read map pixel data. Expected a 128x128 RGBA binary file.");
                 return;
             }
 
             mapd->save(level->getLevelStorage());
 
-            if (param.output) {
+            if (showOutput) {
                 output.success("Map data has been updated");
             } else {
                 output.mSuccessCount++;
@@ -184,12 +191,12 @@ void RemoteCallExport() {
         }
 
         std::string mapKey = std::format("map_{}", uuid);
-        if (storage->hasKey(mapKey, DBHelpers::Category::Item)) {
-            storage->deleteData(mapKey, DBHelpers::Category::Item);
+        // 使用 ::DBHelpers::Category::Item
+        if (storage->hasKey(mapKey, ::DBHelpers::Category::Item)) {
+            storage->deleteData(mapKey, ::DBHelpers::Category::Item);
             return true;
-        } else {
-            return false;
         }
+        return false;
     });
 
     RemoteCall::exportAs(kRemoteNamespace, "getMapList", []() {
@@ -200,12 +207,11 @@ void RemoteCallExport() {
             return uuids;
         }
 
-        storage->forEachKeyWithPrefix("map_", DBHelpers::Category::Item, [&](std::string_view keyLeft, std::string_view) {
+        storage->forEachKeyWithPrefix("map_", ::DBHelpers::Category::Item, [&](std::string_view keyLeft, std::string_view) {
             try {
                 uuids.push_back(std::stoll(std::string{keyLeft}));
             } catch (std::exception const& e) {
                 logger.error(e.what());
-                return;
             }
         });
         return uuids;
@@ -227,35 +233,28 @@ CustomMap& CustomMap::getInstance() {
 
 bool CustomMap::load() {
     getSelf().getLogger().info("loading...");
-
     return true;
 }
 
 bool CustomMap::enable() {
     getSelf().getLogger().info("enabling...");
-
     RemoteCallExport();
     RegisterMapCommands();
-
     return true;
 }
 
 bool CustomMap::disable() {
     getSelf().getLogger().info("disabling...");
-
     RemoteCallCleanup();
-
     return true;
 }
 
 bool CustomMap::unload() {
     getSelf().getLogger().info("unloading...");
-
     RemoteCallCleanup();
-
     return true;
 }
 
-LL_REGISTER_MOD(custom_map::CustomMap, custom_map::CustomMap::getInstance());
-
 } // namespace custom_map
+
+LL_REGISTER_MOD(custom_map::CustomMap, custom_map::CustomMap::getInstance());
