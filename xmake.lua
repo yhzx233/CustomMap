@@ -11,10 +11,10 @@ option_end()
 -- add_requires("levilamina x.x.x") for a specific version
 -- add_requires("levilamina develop") to use develop version
 -- please note that you should add bdslibrary yourself if using dev version
-add_requires("levilamina 26.20.*", {configs = {target_type = get_config("target_type")}})
+add_requires("levilamina 26.40.*", {configs = {target_type = get_config("target_type")}})
 
 add_requires("levibuildscript")
-add_requires("legacyremotecall 0.19.0")
+add_requires("legacyremotecall 0.21.1")
 
 if not has_config("vs_runtime") then
     set_runtimes("MD")
